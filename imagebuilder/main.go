@@ -19,10 +19,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"golang.org/x/crypto/ssh"
 	"math/rand"
 	"time"
-
-	"golang.org/x/crypto/ssh"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -58,6 +57,7 @@ var flagTag = flag.Bool("tag", true, "Set to tag image")
 var flagPublish = flag.Bool("publish", true, "Set to publish image")
 var flagReplicate = flag.Bool("replicate", true, "Set to copy the image to all regions")
 var flagDown = flag.Bool("down", true, "Set to shut down instance (if found)")
+var flagAddTags = flag.String("addtags", "", "Comma-separated list of key=value pairs to be added as additional Tags")
 
 var flagLocalhost = flag.Bool("localhost", false, "Set to use local machine for execution")
 
@@ -94,6 +94,11 @@ func main() {
 		glog.Exitf("Error loading config: %v", err)
 	}
 
+	for key, value := range splitAdditionalTags() {
+		glog.Infof("Injecting additional tag: %q = %q", key, value)
+		config.Tags[key] = value
+	}
+
 	var cloud imagebuilder.Cloud
 	switch config.Cloud {
 	case "aws":
@@ -101,6 +106,7 @@ func main() {
 		if err != nil {
 			glog.Exitf("%v", err)
 		}
+		awsConfig.Tags = config.Tags
 		templateContext = awsConfig
 		cloud = awsCloud
 
@@ -113,6 +119,7 @@ func main() {
 		if err != nil {
 			glog.Exitf("%v", err)
 		}
+		gceConfig.Tags = config.Tags
 		templateContext = gceConfig
 		cloud = gceCloud
 
@@ -308,6 +315,21 @@ func main() {
 			}
 		}
 	}
+}
+
+func splitAdditionalTags() map[string]string {
+	tags := make(map[string]string)
+	if *flagAddTags != "" {
+		for _, tagpair := range strings.Split(*flagAddTags, ",") {
+			trimmed := strings.TrimSpace(tagpair)
+			kv := strings.Split(trimmed, "=")
+			if len(kv) != 2 {
+				glog.Fatalf("addtags value malformed, should be key=value: %q", tagpair)
+			}
+			tags[kv[0]] = kv[1]
+		}
+	}
+	return tags
 }
 
 func initAWS(useLocalhost bool) (*imagebuilder.AWSConfig, *imagebuilder.AWSCloud, error) {
