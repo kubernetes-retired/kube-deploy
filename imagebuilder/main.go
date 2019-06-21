@@ -19,9 +19,21 @@ package main
 import (
 	"flag"
 	"fmt"
-	"golang.org/x/crypto/ssh"
 	"math/rand"
+	"net"
+	"net/url"
+	"os"
+	"path"
+	"strings"
 	"time"
+
+	"golang.org/x/crypto/ssh"
+
+	"io/ioutil"
+	"net/url"
+	"os"
+	"path"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -32,13 +44,8 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/storage/v1"
-	"io/ioutil"
 	"k8s.io/kube-deploy/imagebuilder/pkg/imagebuilder"
 	"k8s.io/kube-deploy/imagebuilder/pkg/imagebuilder/executor"
-	"net/url"
-	"os"
-	"path"
-	"strings"
 )
 
 var flagConfig = flag.String("config", "", "Config file to load")
@@ -187,8 +194,14 @@ func main() {
 			glog.Fatalf("Instance was not found (specify --up?)")
 		}
 
+		validateHostKey := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			glog.Infof("accepting host key %s for %s", key, hostname)
+			return nil
+		}
+
 		sshConfig := &ssh.ClientConfig{
-			User: config.SSHUsername,
+			User:            config.SSHUsername,
+			HostKeyCallback: validateHostKey,
 		}
 
 		if !*flagLocalhost {
